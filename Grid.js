@@ -16,7 +16,9 @@ export default class Grid {
       );
     });
   }
-
+  get cells() {
+    return this.#cells;
+  }
   get cellsByRow() {
     return this.#cells.reduce((cellGrid, cell) => {
       cellGrid[cell.y] = cellGrid[cell.y] || [];

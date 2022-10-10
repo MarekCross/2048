@@ -11,25 +11,54 @@ setupInput();
 function setupInput() {
   window.addEventListener('keydown', handleInput, { once: true });
 }
-function handleInput(e) {
+async function handleInput(e) {
   console.log(e.key);
   switch (e.key) {
     case 'ArrowUp':
-      moveUp();
+      if (!canMoveUp()) {
+        setupInput();
+        return;
+      }
+      await moveUp();
       break;
     case 'ArrowDown':
-      moveDown();
+      if (!canMoveDown()) {
+        setupInput();
+        return;
+      }
+      await moveDown();
       break;
     case 'ArrowLeft':
-      moveLeft();
+      if (!canMoveLeft()) {
+        setupInput();
+        return;
+      }
+      await moveLeft();
       break;
     case 'ArrowRight':
-      moveRight();
+      if (!canMoveRight()) {
+        setupInput();
+        return;
+      }
+      await moveRight();
       break;
     default:
       setupInput();
       return;
   }
+
+  grid.cells.forEach(cell => cell.mergeTiles());
+
+  const newTile = new Tile(gameBoard);
+  grid.randomEmptyCell().tile = newTile;
+
+  if (!canMoveUp() && !canMoveDown() && !canMoveLeft() && !canMoveRight()) {
+    newTile.waitForTransition(true).then(() => {
+      alert('you lose');
+    });
+    return;
+  }
+
   setupInput();
 }
 function moveUp() {
@@ -45,25 +74,57 @@ function moveRight() {
   return slideTiles(grid.cellsByRow.map(row => [...row].reverse()));
 }
 
-function slideTiles(cells) {
-  cells.forEach(group => {
-    for (let i = 1; i < group.lenght; i++) {
-      const cell = group[i];
-      if (cell.tile == null) continue;
-      let lastvalidCell;
-      for (let j = i - 1; j >= 0; j--) {
-        const movetoCell = group[j];
-        if (!movetoCell.canAccept(cell.tile)) break;
-        lastvalidCell = movetoCell;
+function canMoveUp() {
+  return canMove(grid.cellsByColumn);
+}
+function canMoveDown() {
+  return canMove(grid.cellsByColumn.map(column => [...column].reverse()));
+}
+function canMoveLeft() {
+  return canMove(grid.cellsByRow);
+}
+function canMoveRight() {
+  return canMove(grid.cellsByRow.map(row => [...row].reverse()));
+}
+function canMove(cells) {
+  return cells.some(group => {
+    return group.some((cell, index) => {
+      if (index == 0) {
+        return false;
       }
-      if (lastvalidCell != null) {
-        if (lastvalidCell.tile != null) {
-          lastvalidCell.mergeTile = cell.tile;
-        } else {
-          lastvalidCell.tile = cell.tile;
-        }
-        cell.tile = null;
+      if (cell.tile == null) {
+        return false;
       }
-    }
+      const movetoCell = group[index - 1];
+      return movetoCell.canAccept(cell.tile);
+    });
   });
+}
+
+function slideTiles(cells) {
+  return Promise.all(
+    cells.flatMap(group => {
+      const promises = [];
+      for (let i = 1; i < group.length; i++) {
+        const cell = group[i];
+        if (cell.tile == null) continue;
+        let lastvalidCell;
+        for (let j = i - 1; j >= 0; j--) {
+          const movetoCell = group[j];
+          if (!movetoCell.canAccept(cell.tile)) break;
+          lastvalidCell = movetoCell;
+        }
+        if (lastvalidCell != null) {
+          promises.push(cell.tile.waitForTransition());
+          if (lastvalidCell.tile != null) {
+            lastvalidCell.mergeTile = cell.tile;
+          } else {
+            lastvalidCell.tile = cell.tile;
+          }
+          cell.tile = null;
+        }
+      }
+      return promises;
+    })
+  );
 }
